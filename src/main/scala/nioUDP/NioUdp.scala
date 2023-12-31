@@ -27,7 +27,7 @@ object NioUdp extends IOApp {
         datagramChannel.setOption(StandardSocketOptions.SO_SNDBUF, 4 * 1024)
 
         datagramChannel.bind(new InetSocketAddress(ip, port))
-        println(s"s[SERVER] UDP server bound to ${datagramChannel.getLocalAddress}")
+        println(s"[SERVER] UDP server bound to ${datagramChannel.getLocalAddress}")
 
         // Send data packets
         val content = ByteBuffer.allocate(N_BYTES)
@@ -51,7 +51,7 @@ object NioUdp extends IOApp {
         println("[CLIENT] Everything works fine")
     }
 
-  def client(): Unit =
+  def connectedClient = {
     val serverPort: Int = 5555
     val serverIp: String = "127.0.0.1"
 
@@ -67,12 +67,15 @@ object NioUdp extends IOApp {
         datagramChannel.setOption(StandardSocketOptions.SO_RCVBUF, 4 * 1024)
         datagramChannel.setOption(StandardSocketOptions.SO_SNDBUF, 4 * 1024)
 
-        // Send to server
-        val sent = datagramChannel.send(echoText, new InetSocketAddress(serverIp, serverPort))
-        println(s"[CLIENT] I have successfully sent $sent bytes to the echo server!")
+        datagramChannel.connect(new InetSocketAddress(serverIp, serverPort))
+        if (datagramChannel.isConnected) {
+          // Send to server
+          val sent = datagramChannel.write(echoText)
+          println(s"[CLIENT] I have successfully sent $sent bytes to the echo server!")
+        }
 
         // Get echo back
-        datagramChannel.receive(content)
+        datagramChannel.read(content)
         content.flip()
         val charBuffer = decoder.decode(content)
         println(charBuffer.toString)
@@ -87,9 +90,10 @@ object NioUdp extends IOApp {
       case Success(_) =>
         println("[CLIENT] Everything works fine")
     }
+  }
 
   override def run(args: List[String]): IO[ExitCode] =
-    (IO(server()), IO.sleep(500.millis).flatMap(_ => IO(client())))
+    (IO(server()), IO.sleep(500.millis).flatMap(_ => IO(connectedClient)))
       .parMapN((s, c) => ())
       .as(ExitCode.Success)
 }
